@@ -779,11 +779,11 @@ func flagDuplicates(opts *Opts, shard *bam.Shard, readGroupLibrary map[string]st
 				if shard.RecordInShard(r) {
 					if i == 0 {
 						log.Debug.Printf("marking %s as primary of DI %d", r.Name, dupSetId)
-						flagRead(opts, r, true, false, dupSetId, len(dupSet.pairs), len(dupSet.pairs)-len(optDups)-1,
+						flagRead(opts, r, true, false, dupSetId, len(dupSet.pairs), len(dupSet.pairs)-len(optDups),
 							dupSet.corrected[r.Name])
 					} else {
 						log.Debug.Printf("marking %s as duplicate of DI %d optical %v", r.Name, dupSetId, optDups[qname])
-						flagRead(opts, r, false, optDups[qname], dupSetId, len(dupSet.pairs), len(dupSet.pairs)-len(optDups)-1,
+						flagRead(opts, r, false, optDups[qname], dupSetId, len(dupSet.pairs), len(dupSet.pairs)-len(optDups),
 							dupSet.corrected[r.Name])
 						metrics := dupMetrics.Get(GetLibrary(readGroupLibrary, r))
 						metrics.ReadPairDups++

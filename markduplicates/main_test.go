@@ -250,10 +250,10 @@ func TestBasicDuplicates(t *testing.T) {
 		{
 			// If there is just one pair, and single in the dupSet, the single gets just DT.
 			[]TestRecord{
-				{R: basicA1, DupFlag: false, ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 1), NewAux("DL", 0)},
+				{R: basicA1, DupFlag: false, ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 1), NewAux("DL", 1)},
 					UnexpectedTags: []sam.Tag{sam.NewTag("DT")}},
 				{R: single, DupFlag: true, ExpectedAuxs: []sam.Aux{NewAux("DT", "LB")}, UnexpectedTags: []sam.Tag{sam.NewTag("DI"), sam.NewTag("DL")}},
-				{R: basicA2, DupFlag: false, ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 1), NewAux("DL", 0)},
+				{R: basicA2, DupFlag: false, ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 1), NewAux("DL", 1)},
 					UnexpectedTags: []sam.Tag{sam.NewTag("DT")}},
 			},
 			defaultOpts,
@@ -341,48 +341,48 @@ func TestBasicDuplicates(t *testing.T) {
 			defaultOpts,
 		},
 		{
-			// bagsize=2, with a PCR duplicate should have DL=1.
+			// bagsize=2, with a PCR duplicate should have DL=2.
 			[]TestRecord{
 				{R: NewRecord("A:::1:1000:6:6", chr1, 50, r1F, 55, chr2, cigar0), DupFlag: false,
-					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 2), NewAux("DL", 1)}},
+					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 2), NewAux("DL", 2)}},
 				{R: NewRecord("B:::1:1000:6:5000", chr1, 50, r1F, 55, chr2, cigar0), DupFlag: true,
-					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 2), NewAux("DL", 1)}},
+					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 2), NewAux("DL", 2)}},
 				{R: NewRecord("A:::1:1000:6:6", chr2, 55, r2F, 50, chr1, cigar0), DupFlag: false,
-					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 2), NewAux("DL", 1)}},
+					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 2), NewAux("DL", 2)}},
 				{R: NewRecord("B:::1:1000:6:5000", chr2, 55, r2F, 50, chr1, cigar0), DupFlag: true,
+					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 2), NewAux("DL", 2)}},
+			},
+			defaultOpts,
+		},
+		{
+			// bagsize=2, with an optical duplicate should have DL=1.
+			[]TestRecord{
+				{R: NewRecord("A:::1:1000:6:6", chr1, 50, r1F, 55, chr2, cigar0), DupFlag: false,
+					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 2), NewAux("DL", 1)}},
+				{R: NewRecord("B:::1:1000:6:7", chr1, 50, r1F, 55, chr2, cigar0), DupFlag: true,
+					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 2), NewAux("DL", 1)}},
+				{R: NewRecord("A:::1:1000:6:6", chr2, 55, r2F, 50, chr1, cigar0), DupFlag: false,
+					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 2), NewAux("DL", 1)}},
+				{R: NewRecord("B:::1:1000:6:7", chr2, 55, r2F, 50, chr1, cigar0), DupFlag: true,
 					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 2), NewAux("DL", 1)}},
 			},
 			defaultOpts,
 		},
 		{
-			// bagsize=2, with an optical duplicate should have DL=0.
+			// bagsize=3, with one optical duplicate should have DL=2.
 			[]TestRecord{
 				{R: NewRecord("A:::1:1000:6:6", chr1, 50, r1F, 55, chr2, cigar0), DupFlag: false,
-					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 2), NewAux("DL", 0)}},
+					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 3), NewAux("DL", 2)}},
 				{R: NewRecord("B:::1:1000:6:7", chr1, 50, r1F, 55, chr2, cigar0), DupFlag: true,
-					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 2), NewAux("DL", 0)}},
-				{R: NewRecord("A:::1:1000:6:6", chr2, 55, r2F, 50, chr1, cigar0), DupFlag: false,
-					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 2), NewAux("DL", 0)}},
-				{R: NewRecord("B:::1:1000:6:7", chr2, 55, r2F, 50, chr1, cigar0), DupFlag: true,
-					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 2), NewAux("DL", 0)}},
-			},
-			defaultOpts,
-		},
-		{
-			// bagsize=3, with one optical duplicate should have DL=1.
-			[]TestRecord{
-				{R: NewRecord("A:::1:1000:6:6", chr1, 50, r1F, 55, chr2, cigar0), DupFlag: false,
-					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 3), NewAux("DL", 1)}},
-				{R: NewRecord("B:::1:1000:6:7", chr1, 50, r1F, 55, chr2, cigar0), DupFlag: true,
-					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 3), NewAux("DL", 1)}},
+					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 3), NewAux("DL", 2)}},
 				{R: NewRecord("C:::1:1000:6:5000", chr1, 50, r1F, 55, chr2, cigar0), DupFlag: true,
-					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 3), NewAux("DL", 1)}},
+					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 3), NewAux("DL", 2)}},
 				{R: NewRecord("A:::1:1000:6:6", chr2, 55, r2F, 50, chr1, cigar0), DupFlag: false,
-					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 3), NewAux("DL", 1)}},
+					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 3), NewAux("DL", 2)}},
 				{R: NewRecord("B:::1:1000:6:7", chr2, 55, r2F, 50, chr1, cigar0), DupFlag: true,
-					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 3), NewAux("DL", 1)}},
+					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 3), NewAux("DL", 2)}},
 				{R: NewRecord("C:::1:1000:6:5000", chr2, 55, r2F, 50, chr1, cigar0), DupFlag: true,
-					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 3), NewAux("DL", 1)}},
+					ExpectedAuxs: []sam.Aux{NewAux("DI", "0"), NewAux("DS", 3), NewAux("DL", 2)}},
 			},
 			defaultOpts,
 		},

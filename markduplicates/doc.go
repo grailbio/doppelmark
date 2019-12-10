@@ -79,8 +79,8 @@
   primary duplicate pair.  DI is not set for mate-unmapped reads.
 
   DL is the number of library (LB aka PCR) duplicate pairs in the
-  duplicate set. This is the DS value minus the number of "SQ"
-  duplicates pairs in the duplicate set.
+  duplicate set, including the primary. This is equal to the DS value
+  minus the number of "SQ" duplicates pairs in the duplicate set.
 
   DS is the number of pairs in the duplicate set.  DS is not set on
   mate-unmapped reads, and it also does not count mate-unmapped
