@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/grailbio/base/errors"
@@ -88,6 +89,13 @@ func (m *Metrics) Add(other *Metrics) {
 	m.ReadPairOpticalDups += other.ReadPairOpticalDups
 }
 
+type highCovShard struct {
+	startRef string
+	endRef   string
+	start    int
+	end      int
+}
+
 // MetricsCollection contains metrics computed by Mark.
 type MetricsCollection struct {
 	// Global metrics
@@ -100,13 +108,17 @@ type MetricsCollection struct {
 	// LibraryMetrics contains per-library metrics.
 	LibraryMetrics map[string]*Metrics
 
+	// High coverage regions and read counts.
+	HighCoverageShards []highCovShard
+
 	mutex sync.Mutex
 }
 
 func newMetricsCollection() *MetricsCollection {
 	mc := &MetricsCollection{
-		LibraryMetrics:  make(map[string]*Metrics),
-		OpticalDistance: make([][]int64, 4),
+		LibraryMetrics:     make(map[string]*Metrics),
+		OpticalDistance:    make([][]int64, 4),
+		HighCoverageShards: make([]highCovShard, 0),
 	}
 	for i := range mc.OpticalDistance {
 		mc.OpticalDistance[i] = make([]int64, 60000)
@@ -142,6 +154,7 @@ func (mc *MetricsCollection) Merge(other *MetricsCollection) {
 			mc.LibraryMetrics[library] = &new
 		}
 	}
+	mc.HighCoverageShards = append(mc.HighCoverageShards, other.HighCoverageShards...)
 	for i := range mc.OpticalDistance {
 		if len(mc.OpticalDistance[i]) < len(other.OpticalDistance[i]) {
 			temp := make([]int64, len(other.OpticalDistance[i]))
@@ -153,6 +166,13 @@ func (mc *MetricsCollection) Merge(other *MetricsCollection) {
 			mc.OpticalDistance[i][j] += other.OpticalDistance[i][j]
 		}
 	}
+}
+
+func (mc *MetricsCollection) AddHighCovShard(s highCovShard) {
+	mc.mutex.Lock()
+	defer mc.mutex.Unlock()
+
+	mc.HighCoverageShards = append(mc.HighCoverageShards, s)
 }
 
 // AddDistance increments the histogram counter for the given bagsize
@@ -201,6 +221,31 @@ func writeMetrics(ctx context.Context, opts *Opts, globalMetrics *MetricsCollect
 	}
 	if _, err = f.Write([]byte(s)); err != nil {
 		return errors.E(err, "error writing to metrics file:", opts.MetricsFile)
+	}
+	return nil
+}
+
+func writeHighCoverageShards(ctx context.Context, opts *Opts, globalMetrics *MetricsCollection) (err error) {
+	var f *os.File
+	f, err = os.Create(opts.HighCoverageShardsFile)
+	if err != nil {
+		return errors.E(err, "Couldn't create high coverage regions file:",
+			opts.HighCoverageShardsFile)
+	}
+	defer func() {
+		if err2 := f.Close(); err == nil && err2 != nil {
+			err = err2
+		}
+	}()
+
+	s := "start_chr\tstart_chr_start\tend_chr\tend_chr_end\n"
+	for _, hcs := range globalMetrics.HighCoverageShards {
+		s += hcs.startRef + "\t" + strconv.Itoa(hcs.start) + "\t" +
+			hcs.endRef + "\t" + strconv.Itoa(hcs.end) + "\n"
+	}
+	if _, err = f.Write([]byte(s)); err != nil {
+		return errors.E(err, "error writing to high coverage regions file:",
+			opts.HighCoverageShardsFile)
 	}
 	return nil
 }

@@ -30,6 +30,7 @@ import (
 var (
 	defaultOpts = Opts{
 		ShardSize:            100,
+		DepthMax:             100000,
 		Padding:              10,
 		Parallelism:          1,
 		QueueLength:          10,
@@ -300,6 +301,7 @@ func TestBasicDuplicates(t *testing.T) {
 			},
 			Opts{
 				ShardSize:            100,
+				DepthMax:             100000,
 				Padding:              100,
 				Parallelism:          1,
 				QueueLength:          10,
@@ -903,6 +905,7 @@ func TestIntDI(t *testing.T) {
 		outputPath := NewTestOutput(tempDir, 0, format)
 		opts := Opts{
 			ShardSize:            100,
+			DepthMax:             100000,
 			Padding:              10,
 			Parallelism:          1,
 			QueueLength:          10,
@@ -1264,6 +1267,7 @@ func TestBagID(t *testing.T) {
 		outputPath := NewTestOutput(tempDir, 0, format)
 		opts := Opts{
 			Padding:              10,
+			DepthMax:             100000,
 			Parallelism:          1,
 			QueueLength:          10,
 			ClearExisting:        false,
@@ -1609,6 +1613,7 @@ func TestOpticalDetector(t *testing.T) {
 			outputPath := NewTestOutput(tempDir, testIdx, format)
 			opts := Opts{
 				ShardSize:            100,
+				DepthMax:             100000,
 				Padding:              10,
 				Parallelism:          1,
 				QueueLength:          10,
@@ -1819,6 +1824,7 @@ func TestMetrics(t *testing.T) {
 				outputPath := NewTestOutput(tempDir, testIdx, format)
 				opts := Opts{
 					ShardSize:            100,
+					DepthMax:             100000,
 					Padding:              10,
 					Parallelism:          1,
 					QueueLength:          10,
@@ -1875,52 +1881,52 @@ func TestAlignDistCheck(t *testing.T) {
 		globalMaxAlignDist: &max,
 		mutex:              &m,
 	}
-	assert.NoError(t, c.Process(NewRecord("A", chr1, 0, r1F, 100, chr1,
+	assert.NoError(t, c.Process(0, false, NewRecord("A", chr1, 0, r1F, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarMatch, 10),
 		})))
-	assert.NoError(t, c.Process(NewRecord("A", chr1, 0, r1F, 100, chr1,
+	assert.NoError(t, c.Process(0, false, NewRecord("A", chr1, 0, r1F, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarSoftClipped, 10),
 			sam.NewCigarOp(sam.CigarMatch, 10),
 		})))
-	assert.NoError(t, c.Process(NewRecord("A", chr1, 0, r1F, 100, chr1,
+	assert.NoError(t, c.Process(0, false, NewRecord("A", chr1, 0, r1F, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarHardClipped, 10),
 			sam.NewCigarOp(sam.CigarMatch, 10),
 		})))
-	assert.Error(t, c.Process(NewRecord("A", chr1, 0, r1F, 100, chr1,
+	assert.Error(t, c.Process(0, false, NewRecord("A", chr1, 0, r1F, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarSoftClipped, 11),
 			sam.NewCigarOp(sam.CigarMatch, 10),
 		})),
 		"alignment distance(%d) exceeds padding(%d) on read: %v", 11, 10, "A")
-	assert.Error(t, c.Process(NewRecord("A", chr1, 0, r1F, 100, chr1,
+	assert.Error(t, c.Process(0, false, NewRecord("A", chr1, 0, r1F, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarHardClipped, 11),
 			sam.NewCigarOp(sam.CigarMatch, 10),
 		})),
 		"alignment distance(%d) exceeds padding(%d) on read: %v", 11, 10, "A")
-	assert.Error(t, c.Process(NewRecord("A", chr1, 10, r1R, 100, chr1,
+	assert.Error(t, c.Process(0, false, NewRecord("A", chr1, 10, r1R, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarMatch, 5),
 			sam.NewCigarOp(sam.CigarDeletion, 2),
 			sam.NewCigarOp(sam.CigarMatch, 5),
 		})),
 		"alignment distance(%d) exceeds padding(%d) on read: %v", 11, 10, "A")
-	assert.Error(t, c.Process(NewRecord("A", chr1, 10, r1R, 100, chr1,
+	assert.Error(t, c.Process(0, false, NewRecord("A", chr1, 10, r1R, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarMatch, 10),
 			sam.NewCigarOp(sam.CigarSoftClipped, 2),
 		})),
 		"alignment distance(%d) exceeds padding(%d) on read: %v", 12, 10, "A")
-	assert.Error(t, c.Process(NewRecord("A", chr1, 10, r1R, 100, chr1,
+	assert.Error(t, c.Process(0, false, NewRecord("A", chr1, 10, r1R, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarMatch, 10),
 			sam.NewCigarOp(sam.CigarHardClipped, 3),
 		})),
 		"alignment distance(%d) exceeds padding(%d) on read: %v", 13, 10, "A")
-	assert.Error(t, c.Process(NewRecord("A", chr1, 0, r1R, 100, chr1,
+	assert.Error(t, c.Process(0, false, NewRecord("A", chr1, 0, r1R, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarMatch, 12),
 		})),

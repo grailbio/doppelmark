@@ -72,30 +72,32 @@ type OpticalDetector interface {
 // Opts for mark-duplicates.
 type Opts struct {
 	// Commandline options.
-	BamFile              string
-	IndexFile            string
-	MetricsFile          string
-	Format               string
-	ShardSize            int
-	MinBases             int
-	Padding              int
-	DiskMateShards       int
-	ScratchDir           string
-	Parallelism          int
-	QueueLength          int
-	ClearExisting        bool
-	RemoveDups           bool
-	TagDups              bool
-	IntDI                bool
-	UseUmis              bool
-	UmiFile              string
-	ScavengeUmis         int
-	EmitUnmodifiedFields bool
-	SeparateSingletons   bool
-	OutputPath           string
-	StrandSpecific       bool
-	OpticalHistogram     string
-	OpticalHistogramMax  int
+	BamFile                string
+	IndexFile              string
+	MetricsFile            string
+	HighCoverageShardsFile string
+	Format                 string
+	DepthMax               int
+	ShardSize              int
+	MinBases               int
+	Padding                int
+	DiskMateShards         int
+	ScratchDir             string
+	Parallelism            int
+	QueueLength            int
+	ClearExisting          bool
+	RemoveDups             bool
+	TagDups                bool
+	IntDI                  bool
+	UseUmis                bool
+	UmiFile                string
+	ScavengeUmis           int
+	EmitUnmodifiedFields   bool
+	SeparateSingletons     bool
+	OutputPath             string
+	StrandSpecific         bool
+	OpticalHistogram       string
+	OpticalHistogramMax    int
 
 	// Data and operators derived from commandline options.
 	BagProcessorFactories []BagProcessorFactory
@@ -110,6 +112,37 @@ type duplicateMatcher interface {
 	nextDupSet() (*duplicateSet, bool)
 }
 
+type highCoverageCheck struct {
+	maxDepth           int
+	coverageMap        *map[int][]int
+	globalShardCovInfo *[]int
+	mutex              *sync.Mutex
+}
+
+func (m *highCoverageCheck) Process(shardIdx int, recordInShard bool, r *sam.Record) error {
+	pos := r.Start()
+	for _, co := range r.Cigar {
+		if co.Type().Consumes().Reference == 1 {
+			for i := 0; i < co.Len(); i++ {
+				if recordInShard {
+					(*m.coverageMap)[r.Ref.ID()][pos+i]++
+					depth := (*m.coverageMap)[r.Ref.ID()][pos+i]
+					if depth > (*m.globalShardCovInfo)[shardIdx] {
+						(*m.globalShardCovInfo)[shardIdx] = depth
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (m *highCoverageCheck) Close(shardIdx int) {
+	if (*m.globalShardCovInfo)[shardIdx] > m.maxDepth {
+		log.Printf("Shard %d has high coverage: %d", shardIdx, (*m.globalShardCovInfo)[shardIdx])
+	}
+}
+
 type maxAlignDistCheck struct {
 	clearExisting      bool
 	padding            int
@@ -120,7 +153,7 @@ type maxAlignDistCheck struct {
 	mutex              *sync.Mutex
 }
 
-func (m *maxAlignDistCheck) Process(r *sam.Record) error {
+func (m *maxAlignDistCheck) Process(_ int, _ bool, r *sam.Record) error {
 	if m.clearExisting {
 		clearDupFlagTags(r)
 	}
@@ -138,7 +171,7 @@ func (m *maxAlignDistCheck) Process(r *sam.Record) error {
 	return nil
 }
 
-func (m *maxAlignDistCheck) Close() {
+func (m *maxAlignDistCheck) Close(_ int) {
 	log.Debug.Printf("maximum alignment distance: %d", m.maxAlignDist)
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -152,6 +185,7 @@ type MarkDuplicates struct {
 	Provider           bamprovider.Provider
 	Opts               *Opts
 	shardList          []bam.Shard
+	shardCovInfo       []int // one entry per shard, contains maximum depth within shard
 	readGroupLibrary   map[string]string
 	umiCorrector       *umi.SnapCorrector
 	distantMates       *bampair.DistantMateTable
@@ -182,6 +216,7 @@ func (m *MarkDuplicates) Mark(shards []bam.Shard) (*MetricsCollection, error) {
 	} else {
 		m.shardList = shards
 	}
+	m.shardCovInfo = make([]int, len(m.shardList))
 	if err != nil {
 		return nil, err
 	}
@@ -205,13 +240,24 @@ func (m *MarkDuplicates) Mark(shards []bam.Shard) (*MetricsCollection, error) {
 		DiskShards:  m.Opts.DiskMateShards,
 		ScratchDir:  m.Opts.ScratchDir,
 	}
-
+	coverageMap := make(map[int][]int, len(header.Refs()))
+	for _, ref := range header.Refs() {
+		coverageMap[ref.ID()] = make([]int, ref.Len())
+	}
 	recordProcessors := []func() bampair.RecordProcessor{
 		func() bampair.RecordProcessor {
 			return &maxAlignDistCheck{
 				clearExisting:      m.Opts.ClearExisting,
 				padding:            m.Opts.Padding,
 				globalMaxAlignDist: &m.globalMaxAlignDist,
+				mutex:              &m.mutex,
+			}
+		},
+		func() bampair.RecordProcessor {
+			return &highCoverageCheck{
+				maxDepth:           m.Opts.DepthMax,
+				coverageMap:        &coverageMap,
+				globalShardCovInfo: &m.shardCovInfo,
 				mutex:              &m.mutex,
 			}
 		},
@@ -231,9 +277,10 @@ func (m *MarkDuplicates) Mark(shards []bam.Shard) (*MetricsCollection, error) {
 	if m.Opts.OpticalDetector != nil {
 		m.Opts.OpticalDetector.RecordProcessorsDone()
 	}
+	coverageMap = make(map[int][]int) // free memory
 
 	for i := 0; i < m.shardInfo.Len(); i++ {
-		log.Debug.Printf("shard[%d] info: %v", i, m.shardInfo.GetInfoByIdx(i))
+		log.Printf("shard[%d] info: %v", i, m.shardInfo.GetInfoByIdx(i))
 	}
 
 	switch bamprovider.ParseFileType(m.Opts.Format) {
@@ -473,7 +520,17 @@ func (m *MarkDuplicates) processShard(
 	shard bam.Shard,
 	worker int,
 	writeCallback func(*sam.Record)) {
-
+	if m.shardCovInfo[shard.ShardIdx] > m.Opts.DepthMax {
+		log.Printf("Ignoring reads in high coverage shard %d, %s:%d - %s:%d",
+			shard.ShardIdx, shard.StartRef.Name(), shard.Start, shard.EndRef.Name(), shard.End)
+		m.globalMetrics.AddHighCovShard(highCovShard{
+			startRef: shard.StartRef.Name(),
+			endRef:   shard.EndRef.Name(),
+			start:    shard.Start,
+			end:      shard.End,
+		})
+		return
+	}
 	header, err := m.Provider.GetHeader()
 	if err != nil {
 		log.Fatalf("error getting header: %v", err)
@@ -498,9 +555,16 @@ func (m *MarkDuplicates) processShard(
 	// shardInfo.PaddingStartFileIdx to calculate the global file
 	// index of each read.
 	readIdx := uint64(0)
+	missingReads := 0
 
 	for iter.Scan() {
 		record := iter.Record()
+		mateShard := m.shardInfo.GetMateShard(record)
+		if mateShard.ShardIdx != shard.ShardIdx && mateShard.StartRef != nil && mateShard.EndRef != nil && m.shardCovInfo[mateShard.ShardIdx] > m.Opts.DepthMax {
+			sam.PutInFreePool(record)
+			missingReads++
+			continue
+		}
 		if m.Opts.ClearExisting {
 			clearDupFlagTags(record)
 		}
@@ -599,6 +663,11 @@ func (m *MarkDuplicates) processShard(
 			}
 		}
 		readIdx++
+	}
+	if missingReads > 0 {
+		log.Printf("Ignoring %d reads in shard %d, %s:%d - %s:%d because mate is in high coverage shard",
+			missingReads, shard.ShardIdx, shard.StartRef.Name(), shard.Start, shard.EndRef.Name(), shard.End)
+		pending = make(map[string]bool)
 	}
 	for name := range pending {
 		log.Error.Printf("Could not find mate for pending read: %v", name)
@@ -739,6 +808,11 @@ func SetupAndMark(ctx context.Context, provider bamprovider.Provider, opts *Opts
 	// Output metric and histogram files.
 	if opts.MetricsFile != "" {
 		if err := writeMetrics(ctx, opts, globalMetrics); err != nil {
+			return err
+		}
+	}
+	if opts.HighCoverageShardsFile != "" {
+		if err := writeHighCoverageShards(ctx, opts, globalMetrics); err != nil {
 			return err
 		}
 	}
