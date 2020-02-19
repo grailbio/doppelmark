@@ -214,6 +214,7 @@ type MarkDuplicates struct {
 	Provider           bamprovider.Provider
 	Opts               *Opts
 	shardList          []bam.Shard
+	highCoverageShards map[int]bam.Shard
 	shardCovInfo       []int // one entry per shard, contains maximum depth within shard
 	readGroupLibrary   map[string]string
 	umiCorrector       *umi.SnapCorrector
@@ -246,6 +247,7 @@ func (m *MarkDuplicates) Mark(shards []bam.Shard) (*MetricsCollection, error) {
 		m.shardList = shards
 	}
 	m.shardCovInfo = make([]int, len(m.shardList))
+	m.highCoverageShards = make(map[int]bam.Shard)
 	if err != nil {
 		return nil, err
 	}
@@ -311,6 +313,7 @@ func (m *MarkDuplicates) Mark(shards []bam.Shard) (*MetricsCollection, error) {
 	for i := 0; i < m.shardInfo.Len(); i++ {
 		log.Printf("shard[%d] info: %v", i, m.shardInfo.GetInfoByIdx(i))
 	}
+	m.findHighCoverageShards()
 
 	switch bamprovider.ParseFileType(m.Opts.Format) {
 	case bamprovider.BAM:
@@ -544,12 +547,29 @@ func updateMetrics(readGroupLibrary map[string]string, MetricsCollection *Metric
 	}
 }
 
+func (m *MarkDuplicates) findHighCoverageShards() {
+	for _, shard := range m.shardList {
+		if m.shardCovInfo[shard.ShardIdx] > m.Opts.DepthMax {
+			m.highCoverageShards[shard.ShardIdx] = shard
+		}
+	}
+}
+
+func (m *MarkDuplicates) recOrMateInHighCovShard(r *sam.Record) bool {
+	for _, highCovShard := range m.highCoverageShards {
+		if highCovShard.RecordInShard(r) || highCovShard.MateInShard(r) {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *MarkDuplicates) processShard(
 	iter bamprovider.Iterator,
 	shard bam.Shard,
 	worker int,
 	writeCallback func(*sam.Record)) {
-	if m.shardCovInfo[shard.ShardIdx] > m.Opts.DepthMax {
+	if _, ok := m.highCoverageShards[shard.ShardIdx]; ok {
 		log.Printf("Ignoring reads in high coverage shard %d, %s:%d - %s:%d",
 			shard.ShardIdx, shard.StartRef.Name(), shard.Start, shard.EndRef.Name(), shard.End)
 		m.globalMetrics.AddHighCovShard(highCovShard{
@@ -585,15 +605,8 @@ func (m *MarkDuplicates) processShard(
 	// index of each read.
 	readIdx := uint64(0)
 	missingReads := 0
-
 	for iter.Scan() {
 		record := iter.Record()
-		mateShard := m.shardInfo.GetMateShard(record)
-		if mateShard.ShardIdx != shard.ShardIdx && mateShard.StartRef != nil && mateShard.EndRef != nil && m.shardCovInfo[mateShard.ShardIdx] > m.Opts.DepthMax {
-			sam.PutInFreePool(record)
-			missingReads++
-			continue
-		}
 		if m.Opts.ClearExisting {
 			clearDupFlagTags(record)
 		}
@@ -626,10 +639,18 @@ func (m *MarkDuplicates) processShard(
 				left:        record,
 				leftFileIdx: readIdx + info.PaddingStartFileIdx,
 			}
-
 			matcher.insertSingleton(record, readIdx+info.PaddingStartFileIdx)
 			record = nil // Don't put back in the free pool.
 		} else {
+			if m.recOrMateInHighCovShard(record) {
+				if len(orderedReads) > 0 {
+					orderedReads = orderedReads[:len(orderedReads)-1]
+				}
+				sam.PutInFreePool(record)
+				missingReads++
+				readIdx++
+				continue
+			}
 			// If we reach here, this read is mapped, it is in the
 			// padded shard, and it also has a mapped mate, so we
 			// should be able to form a pair.
@@ -696,10 +717,9 @@ func (m *MarkDuplicates) processShard(
 	if missingReads > 0 {
 		log.Printf("Ignoring %d reads in shard %d, %s:%d - %s:%d because mate is in high coverage shard",
 			missingReads, shard.ShardIdx, shard.StartRef.Name(), shard.Start, shard.EndRef.Name(), shard.End)
-		pending = make(map[string]bool)
 	}
 	for name := range pending {
-		log.Error.Printf("Could not find mate for pending read: %v", name)
+		log.Error.Printf("Could not find mate for pending read: %v in shard %d, %s:%d - %s:%d", name, shard.ShardIdx, shard.StartRef.Name(), shard.Start, shard.EndRef.Name(), shard.End)
 	}
 	if len(pending) > 0 {
 		log.Fatalf("Could not find mate for some reads")

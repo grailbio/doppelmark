@@ -43,7 +43,7 @@ var (
 	parallelism          = flag.Int("parallelism", runtime.NumCPU(), "Number of parallel computations to run during the markdup phase")
 	queueLength          = flag.Int("queue-length", runtime.NumCPU()*5, "Number shards to queue while waiting for flush")
 	shardSize            = flag.Int("shard-size", 5000000, "approx shard size in bytes")
-	maxDepth             = flag.Int("max-depth", 100000, "maximum coverage depth at a position")
+	maxDepth             = flag.Int("max-depth", 3000000, "maximum coverage depth at a position")
 	minBases             = flag.Int("min-bases", 5000, "minimum number of bases per shard")
 	padding              = flag.Int("clip-padding", 143, "padding in bp, this must be larger than the largest per-read clipping distance")
 	clearExisting        = flag.Bool("clear-existing", false, "clear existing duplicate flag before marking")

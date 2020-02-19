@@ -20,6 +20,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/grailbio/bio/encoding/bam"
 	gbam "github.com/grailbio/bio/encoding/bam"
 	"github.com/grailbio/bio/encoding/bamprovider"
 	"github.com/grailbio/hts/sam"
@@ -2174,5 +2175,44 @@ func TestHighCoverage(t *testing.T) {
 			assert.Equal(t, testCase.expectedCoverageMap, coverageMap)
 			assert.Equal(t, testCase.expectedCoverageInfo, coverageInfo)
 		})
+	}
+}
+
+func TestIsInHighCoverageShard(t *testing.T) {
+	m := &MarkDuplicates{
+		highCoverageShards: map[int]bam.Shard{
+			0: bam.Shard{ShardIdx: 0, StartRef: chr1, Start: 22, EndRef: chr1, End: 23},
+			1: bam.Shard{ShardIdx: 0, StartRef: chr2, Start: 43, EndRef: chr2, End: 45},
+		},
+	}
+	tests := []struct {
+		record    *sam.Record
+		assertion assert.BoolAssertionFunc
+	}{
+		{
+			NewRecord("A:::1:10:1:1", chr1, 0, r1F, 22, chr1, cigar0),
+			assert.True,
+		}, {
+			NewRecord("A:::1:10:1:1", chr1, 0, r1F, 44, chr2, cigar0),
+			assert.True,
+		}, {
+			NewRecord("A:::1:10:1:1", chr1, 22, r1F, 22, chr1, cigar0),
+			assert.True,
+		}, {
+			NewRecord("A:::1:10:1:1", chr1, 22, r1F, 44, chr2, cigar0),
+			assert.True,
+		}, {
+			NewRecord("A:::1:10:1:1", chr1, 22, r1F, 0, chr2, cigar0),
+			assert.True,
+		}, {
+			NewRecord("A:::1:10:1:1", chr1, 22, r1F, 100, chr1, cigar0),
+			assert.True,
+		}, {
+			NewRecord("A:::1:10:1:1", chr1, 90, r1F, 100, chr1, cigar0),
+			assert.False,
+		},
+	}
+	for _, test := range tests {
+		test.assertion(t, m.recOrMateInHighCovShard(test.record))
 	}
 }
