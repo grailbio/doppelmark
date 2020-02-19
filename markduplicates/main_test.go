@@ -84,6 +84,9 @@ var (
 	cigar1M = []sam.CigarOp{
 		sam.NewCigarOp(sam.CigarMatch, 1),
 	}
+	cigar2M = []sam.CigarOp{
+		sam.NewCigarOp(sam.CigarMatch, 2),
+	}
 
 	// Reads for testing duplicate marking.
 	// The following duplicate group (basic) is entirely in the same shard.
@@ -1876,57 +1879,67 @@ func TestAlignDistCheck(t *testing.T) {
 		max int
 		m   sync.Mutex
 	)
+	shard := gbam.Shard{
+		StartRef: chr1,
+		EndRef:   chr1,
+		Start:    0,
+		End:      100,
+		StartSeq: 0,
+		EndSeq:   0,
+		Padding:  0,
+		ShardIdx: 0,
+	}
 	c := maxAlignDistCheck{
 		padding:            10,
 		globalMaxAlignDist: &max,
 		mutex:              &m,
 	}
-	assert.NoError(t, c.Process(0, false, NewRecord("A", chr1, 0, r1F, 100, chr1,
+	assert.NoError(t, c.Process(shard, NewRecord("A", chr1, 0, r1F, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarMatch, 10),
 		})))
-	assert.NoError(t, c.Process(0, false, NewRecord("A", chr1, 0, r1F, 100, chr1,
+	assert.NoError(t, c.Process(shard, NewRecord("A", chr1, 0, r1F, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarSoftClipped, 10),
 			sam.NewCigarOp(sam.CigarMatch, 10),
 		})))
-	assert.NoError(t, c.Process(0, false, NewRecord("A", chr1, 0, r1F, 100, chr1,
+	assert.NoError(t, c.Process(shard, NewRecord("A", chr1, 0, r1F, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarHardClipped, 10),
 			sam.NewCigarOp(sam.CigarMatch, 10),
 		})))
-	assert.Error(t, c.Process(0, false, NewRecord("A", chr1, 0, r1F, 100, chr1,
+	assert.Error(t, c.Process(shard, NewRecord("A", chr1, 0, r1F, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarSoftClipped, 11),
 			sam.NewCigarOp(sam.CigarMatch, 10),
 		})),
 		"alignment distance(%d) exceeds padding(%d) on read: %v", 11, 10, "A")
-	assert.Error(t, c.Process(0, false, NewRecord("A", chr1, 0, r1F, 100, chr1,
+	assert.Error(t, c.Process(shard, NewRecord("A", chr1, 0, r1F, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarHardClipped, 11),
 			sam.NewCigarOp(sam.CigarMatch, 10),
 		})),
 		"alignment distance(%d) exceeds padding(%d) on read: %v", 11, 10, "A")
-	assert.Error(t, c.Process(0, false, NewRecord("A", chr1, 10, r1R, 100, chr1,
+	assert.Error(t, c.Process(shard, NewRecord("A", chr1, 10, r1R, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarMatch, 5),
 			sam.NewCigarOp(sam.CigarDeletion, 2),
 			sam.NewCigarOp(sam.CigarMatch, 5),
 		})),
 		"alignment distance(%d) exceeds padding(%d) on read: %v", 11, 10, "A")
-	assert.Error(t, c.Process(0, false, NewRecord("A", chr1, 10, r1R, 100, chr1,
+	assert.Error(t, c.Process(shard, NewRecord("A", chr1, 10, r1R, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarMatch, 10),
 			sam.NewCigarOp(sam.CigarSoftClipped, 2),
 		})),
 		"alignment distance(%d) exceeds padding(%d) on read: %v", 12, 10, "A")
-	assert.Error(t, c.Process(0, false, NewRecord("A", chr1, 10, r1R, 100, chr1,
+	assert.Error(t, c.Process(shard, NewRecord("A", chr1, 10, r1R, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarMatch, 10),
 			sam.NewCigarOp(sam.CigarHardClipped, 3),
 		})),
 		"alignment distance(%d) exceeds padding(%d) on read: %v", 13, 10, "A")
-	assert.Error(t, c.Process(0, false, NewRecord("A", chr1, 0, r1R, 100, chr1,
+	assert.Error(t, c.Process(shard, NewRecord("A", chr1, 0, r1R, 100, chr1,
 		[]sam.CigarOp{
 			sam.NewCigarOp(sam.CigarMatch, 12),
 		})),
@@ -1966,4 +1979,200 @@ func TestMetricsCollection(t *testing.T) {
 	}
 	m.OpticalDistance[0] = make([]int64, 10)
 	m.AddDistance(2, 10)
+}
+
+func TestHighCoverage(t *testing.T) {
+	ref1, _ := sam.NewReference("ref1", "", "", 3, nil, nil)
+	ref2, _ := sam.NewReference("ref2", "", "", 3, nil, nil)
+	header, _ := sam.NewHeader(nil, []*sam.Reference{ref1, ref2})
+	assert.NotNil(t, header)
+
+	shard0 := gbam.Shard{
+		StartRef: ref1,
+		EndRef:   ref1,
+		Start:    0,
+		End:      2,
+		StartSeq: 0,
+		EndSeq:   0,
+		Padding:  0,
+		ShardIdx: 0,
+	}
+	shard1 := gbam.Shard{
+		StartRef: ref1,
+		EndRef:   ref2,
+		Start:    2,
+		End:      1,
+		StartSeq: 0,
+		EndSeq:   0,
+		Padding:  0,
+		ShardIdx: 1,
+	}
+	shard2 := gbam.Shard{
+		StartRef: ref2,
+		EndRef:   ref2,
+		Start:    1,
+		End:      3,
+		StartSeq: 0,
+		EndSeq:   0,
+		Padding:  0,
+		ShardIdx: 2,
+	}
+
+	testCases := []struct {
+		name                 string
+		shard                gbam.Shard
+		records              []*sam.Record
+		expectedCoverageMap  map[int][]int
+		expectedCoverageInfo []int // holds the maximum depth for the whole shard.
+	}{
+		{
+			name:  "shard0-only",
+			shard: shard0,
+			records: []*sam.Record{
+				NewRecord("A", ref1, 0, r1F, 10, ref1, cigar2M),
+			},
+			expectedCoverageMap: map[int][]int{
+				0: []int{1, 1, 0},
+				1: []int{0, 0, 0},
+			},
+			expectedCoverageInfo: []int{1, 0, 0},
+		},
+		{
+			name:  "shard0-partial",
+			shard: shard0,
+			records: []*sam.Record{
+				NewRecord("A", ref1, 1, r1F, 10, ref1, cigar2M),
+			},
+			expectedCoverageMap: map[int][]int{
+				0: []int{0, 1, 0},
+				1: []int{0, 0, 0},
+			},
+			expectedCoverageInfo: []int{1, 0, 0},
+		},
+		{
+			name:  "shard1-partial",
+			shard: shard1,
+			records: []*sam.Record{
+				NewRecord("A", ref1, 2, r1F, 10, ref1, cigar2M),
+			},
+			expectedCoverageMap: map[int][]int{
+				0: []int{0, 0, 1},
+				1: []int{0, 0, 0},
+			},
+			expectedCoverageInfo: []int{0, 1, 0},
+		},
+		{
+			name:  "shard1-partial2",
+			shard: shard1,
+			records: []*sam.Record{
+				NewRecord("A", ref2, 0, r1F, 10, ref1, cigar2M),
+			},
+			expectedCoverageMap: map[int][]int{
+				0: []int{0, 0, 0},
+				1: []int{1, 0, 0},
+			},
+			expectedCoverageInfo: []int{0, 1, 0},
+		},
+		{
+			name:  "shard2-starts-before-shard",
+			shard: shard2,
+			records: []*sam.Record{
+				NewRecord("A", ref2, 0, r1F, 10, ref1, cigar2M),
+			},
+			expectedCoverageMap: map[int][]int{
+				0: []int{0, 0, 0},
+				1: []int{0, 1, 0},
+			},
+			expectedCoverageInfo: []int{0, 0, 1},
+		},
+		{
+			name:  "shard2-inshard",
+			shard: shard2,
+			records: []*sam.Record{
+				NewRecord("A", ref2, 1, r1F, 10, ref1, cigar2M),
+			},
+			expectedCoverageMap: map[int][]int{
+				0: []int{0, 0, 0},
+				1: []int{0, 1, 1},
+			},
+			expectedCoverageInfo: []int{0, 0, 1},
+		},
+		{
+			name:  "shard2-partial",
+			shard: shard2,
+			records: []*sam.Record{
+				NewRecord("A", ref2, 2, r1F, 10, ref1, cigar2M),
+			},
+			expectedCoverageMap: map[int][]int{
+				0: []int{0, 0, 0},
+				1: []int{0, 0, 1},
+			},
+			expectedCoverageInfo: []int{0, 0, 1},
+		},
+		{
+			name:  "shard0-two",
+			shard: shard0,
+			records: []*sam.Record{
+				NewRecord("A", ref1, 0, r1F, 10, ref1, cigar2M),
+				NewRecord("A", ref1, 1, r1F, 10, ref1, cigar2M),
+			},
+			expectedCoverageMap: map[int][]int{
+				0: []int{1, 2, 0},
+				1: []int{0, 0, 0},
+			},
+			expectedCoverageInfo: []int{2, 0, 0},
+		},
+		{
+			name:  "shard1-two",
+			shard: shard1,
+			records: []*sam.Record{
+				NewRecord("A", ref1, 1, r1F, 10, ref1, cigar2M),
+				NewRecord("A", ref1, 2, r1F, 10, ref1, cigar2M),
+			},
+			expectedCoverageMap: map[int][]int{
+				0: []int{0, 0, 2},
+				1: []int{0, 0, 0},
+			},
+			expectedCoverageInfo: []int{0, 2, 0},
+		},
+		{
+			name:  "shard2-two",
+			shard: shard2,
+			records: []*sam.Record{
+				NewRecord("A", ref2, 1, r1F, 10, ref1, cigar2M),
+				NewRecord("A", ref2, 2, r1F, 10, ref1, cigar2M),
+			},
+			expectedCoverageMap: map[int][]int{
+				0: []int{0, 0, 0},
+				1: []int{0, 1, 2},
+			},
+			expectedCoverageInfo: []int{0, 0, 2},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			// References ref1 and ref2
+			coverageMap := map[int][]int{
+				0: make([]int, ref1.Len()),
+				1: make([]int, ref2.Len()),
+			}
+			coverageInfo := []int{0, 0, 0}
+			var mutex sync.Mutex
+
+			c := highCoverageCheck{
+				maxDepth:           2,
+				coverageMap:        &coverageMap,
+				globalShardCovInfo: &coverageInfo,
+				mutex:              &mutex,
+			}
+			for _, r := range testCase.records {
+				err := c.Process(testCase.shard, r)
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, testCase.expectedCoverageMap, coverageMap)
+			assert.Equal(t, testCase.expectedCoverageInfo, coverageInfo)
+		})
+	}
 }

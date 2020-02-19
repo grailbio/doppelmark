@@ -119,27 +119,56 @@ type highCoverageCheck struct {
 	mutex              *sync.Mutex
 }
 
-func (m *highCoverageCheck) Process(shardIdx int, recordInShard bool, r *sam.Record) error {
+func (m *highCoverageCheck) Process(shard bam.Shard, r *sam.Record) error {
+	// Count the number of bases that precede the shard.
+	basesPreShard := 0
+	for p := r.Start(); p < r.End(); p++ {
+		if !shard.CoordInShard(0, bam.NewCoord(r.Ref, p, 0)) {
+			basesPreShard++
+		} else {
+			break
+		}
+	}
+	if basesPreShard >= r.Len() {
+		return nil
+	}
+
+	// Count the number of bases that actually overlap the shard.
 	pos := r.Start()
+	basesInShard := r.Len()
+	for p := r.End() - 1; p >= pos; p-- {
+		if !shard.CoordInShard(0, bam.NewCoord(r.Ref, p, 0)) {
+			basesInShard--
+		} else {
+			break
+		}
+	}
+
+	// Increment counters for bases that overlap the shard.
+	counted := 0
+	offset := 0
 	for _, co := range r.Cigar {
 		if co.Type().Consumes().Reference == 1 {
-			for i := 0; i < co.Len(); i++ {
-				if recordInShard {
-					(*m.coverageMap)[r.Ref.ID()][pos+i]++
-					depth := (*m.coverageMap)[r.Ref.ID()][pos+i]
-					if depth > (*m.globalShardCovInfo)[shardIdx] {
-						(*m.globalShardCovInfo)[shardIdx] = depth
+			for i := 0; i < co.Len() && counted < basesInShard && pos+offset < r.Ref.Len(); i++ {
+				if offset >= basesPreShard {
+					(*m.coverageMap)[r.Ref.ID()][pos+offset]++
+					depth := (*m.coverageMap)[r.Ref.ID()][pos+offset]
+					if depth > (*m.globalShardCovInfo)[shard.ShardIdx] {
+						(*m.globalShardCovInfo)[shard.ShardIdx] = depth
 					}
+					counted++
 				}
+				offset++
 			}
 		}
 	}
 	return nil
 }
 
-func (m *highCoverageCheck) Close(shardIdx int) {
-	if (*m.globalShardCovInfo)[shardIdx] > m.maxDepth {
-		log.Printf("Shard %d has high coverage: %d", shardIdx, (*m.globalShardCovInfo)[shardIdx])
+func (m *highCoverageCheck) Close(shard bam.Shard) {
+	if (*m.globalShardCovInfo)[shard.ShardIdx] > m.maxDepth {
+		log.Printf("Shard %d has high coverage: %d", shard.ShardIdx,
+			(*m.globalShardCovInfo)[shard.ShardIdx])
 	}
 }
 
@@ -153,7 +182,7 @@ type maxAlignDistCheck struct {
 	mutex              *sync.Mutex
 }
 
-func (m *maxAlignDistCheck) Process(_ int, _ bool, r *sam.Record) error {
+func (m *maxAlignDistCheck) Process(_ bam.Shard, r *sam.Record) error {
 	if m.clearExisting {
 		clearDupFlagTags(r)
 	}
@@ -171,7 +200,7 @@ func (m *maxAlignDistCheck) Process(_ int, _ bool, r *sam.Record) error {
 	return nil
 }
 
-func (m *maxAlignDistCheck) Close(_ int) {
+func (m *maxAlignDistCheck) Close(_ bam.Shard) {
 	log.Debug.Printf("maximum alignment distance: %d", m.maxAlignDist)
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
