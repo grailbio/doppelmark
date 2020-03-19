@@ -20,7 +20,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/grailbio/bio/encoding/bam"
 	gbam "github.com/grailbio/bio/encoding/bam"
 	"github.com/grailbio/bio/encoding/bamprovider"
 	"github.com/grailbio/hts/sam"
@@ -31,7 +30,6 @@ import (
 var (
 	defaultOpts = Opts{
 		ShardSize:            100,
-		DepthMax:             100000,
 		Padding:              10,
 		Parallelism:          1,
 		QueueLength:          10,
@@ -305,7 +303,6 @@ func TestBasicDuplicates(t *testing.T) {
 			},
 			Opts{
 				ShardSize:            100,
-				DepthMax:             100000,
 				Padding:              100,
 				Parallelism:          1,
 				QueueLength:          10,
@@ -909,7 +906,6 @@ func TestIntDI(t *testing.T) {
 		outputPath := NewTestOutput(tempDir, 0, format)
 		opts := Opts{
 			ShardSize:            100,
-			DepthMax:             100000,
 			Padding:              10,
 			Parallelism:          1,
 			QueueLength:          10,
@@ -1271,7 +1267,6 @@ func TestBagID(t *testing.T) {
 		outputPath := NewTestOutput(tempDir, 0, format)
 		opts := Opts{
 			Padding:              10,
-			DepthMax:             100000,
 			Parallelism:          1,
 			QueueLength:          10,
 			ClearExisting:        false,
@@ -1617,7 +1612,6 @@ func TestOpticalDetector(t *testing.T) {
 			outputPath := NewTestOutput(tempDir, testIdx, format)
 			opts := Opts{
 				ShardSize:            100,
-				DepthMax:             100000,
 				Padding:              10,
 				Parallelism:          1,
 				QueueLength:          10,
@@ -1828,7 +1822,6 @@ func TestMetrics(t *testing.T) {
 				outputPath := NewTestOutput(tempDir, testIdx, format)
 				opts := Opts{
 					ShardSize:            100,
-					DepthMax:             100000,
 					Padding:              10,
 					Parallelism:          1,
 					QueueLength:          10,
@@ -1980,239 +1973,4 @@ func TestMetricsCollection(t *testing.T) {
 	}
 	m.OpticalDistance[0] = make([]int64, 10)
 	m.AddDistance(2, 10)
-}
-
-func TestHighCoverage(t *testing.T) {
-	ref1, _ := sam.NewReference("ref1", "", "", 3, nil, nil)
-	ref2, _ := sam.NewReference("ref2", "", "", 3, nil, nil)
-	header, _ := sam.NewHeader(nil, []*sam.Reference{ref1, ref2})
-	assert.NotNil(t, header)
-
-	shard0 := gbam.Shard{
-		StartRef: ref1,
-		EndRef:   ref1,
-		Start:    0,
-		End:      2,
-		StartSeq: 0,
-		EndSeq:   0,
-		Padding:  0,
-		ShardIdx: 0,
-	}
-	shard1 := gbam.Shard{
-		StartRef: ref1,
-		EndRef:   ref2,
-		Start:    2,
-		End:      1,
-		StartSeq: 0,
-		EndSeq:   0,
-		Padding:  0,
-		ShardIdx: 1,
-	}
-	shard2 := gbam.Shard{
-		StartRef: ref2,
-		EndRef:   ref2,
-		Start:    1,
-		End:      3,
-		StartSeq: 0,
-		EndSeq:   0,
-		Padding:  0,
-		ShardIdx: 2,
-	}
-
-	testCases := []struct {
-		name                 string
-		shard                gbam.Shard
-		records              []*sam.Record
-		expectedCoverageMap  map[int][]int
-		expectedCoverageInfo []int // holds the maximum depth for the whole shard.
-	}{
-		{
-			name:  "shard0-only",
-			shard: shard0,
-			records: []*sam.Record{
-				NewRecord("A", ref1, 0, r1F, 10, ref1, cigar2M),
-			},
-			expectedCoverageMap: map[int][]int{
-				0: []int{1, 1, 0},
-				1: []int{0, 0, 0},
-			},
-			expectedCoverageInfo: []int{1, 0, 0},
-		},
-		{
-			name:  "shard0-partial",
-			shard: shard0,
-			records: []*sam.Record{
-				NewRecord("A", ref1, 1, r1F, 10, ref1, cigar2M),
-			},
-			expectedCoverageMap: map[int][]int{
-				0: []int{0, 1, 0},
-				1: []int{0, 0, 0},
-			},
-			expectedCoverageInfo: []int{1, 0, 0},
-		},
-		{
-			name:  "shard1-partial",
-			shard: shard1,
-			records: []*sam.Record{
-				NewRecord("A", ref1, 2, r1F, 10, ref1, cigar2M),
-			},
-			expectedCoverageMap: map[int][]int{
-				0: []int{0, 0, 1},
-				1: []int{0, 0, 0},
-			},
-			expectedCoverageInfo: []int{0, 1, 0},
-		},
-		{
-			name:  "shard1-partial2",
-			shard: shard1,
-			records: []*sam.Record{
-				NewRecord("A", ref2, 0, r1F, 10, ref1, cigar2M),
-			},
-			expectedCoverageMap: map[int][]int{
-				0: []int{0, 0, 0},
-				1: []int{1, 0, 0},
-			},
-			expectedCoverageInfo: []int{0, 1, 0},
-		},
-		{
-			name:  "shard2-starts-before-shard",
-			shard: shard2,
-			records: []*sam.Record{
-				NewRecord("A", ref2, 0, r1F, 10, ref1, cigar2M),
-			},
-			expectedCoverageMap: map[int][]int{
-				0: []int{0, 0, 0},
-				1: []int{0, 1, 0},
-			},
-			expectedCoverageInfo: []int{0, 0, 1},
-		},
-		{
-			name:  "shard2-inshard",
-			shard: shard2,
-			records: []*sam.Record{
-				NewRecord("A", ref2, 1, r1F, 10, ref1, cigar2M),
-			},
-			expectedCoverageMap: map[int][]int{
-				0: []int{0, 0, 0},
-				1: []int{0, 1, 1},
-			},
-			expectedCoverageInfo: []int{0, 0, 1},
-		},
-		{
-			name:  "shard2-partial",
-			shard: shard2,
-			records: []*sam.Record{
-				NewRecord("A", ref2, 2, r1F, 10, ref1, cigar2M),
-			},
-			expectedCoverageMap: map[int][]int{
-				0: []int{0, 0, 0},
-				1: []int{0, 0, 1},
-			},
-			expectedCoverageInfo: []int{0, 0, 1},
-		},
-		{
-			name:  "shard0-two",
-			shard: shard0,
-			records: []*sam.Record{
-				NewRecord("A", ref1, 0, r1F, 10, ref1, cigar2M),
-				NewRecord("A", ref1, 1, r1F, 10, ref1, cigar2M),
-			},
-			expectedCoverageMap: map[int][]int{
-				0: []int{1, 2, 0},
-				1: []int{0, 0, 0},
-			},
-			expectedCoverageInfo: []int{2, 0, 0},
-		},
-		{
-			name:  "shard1-two",
-			shard: shard1,
-			records: []*sam.Record{
-				NewRecord("A", ref1, 1, r1F, 10, ref1, cigar2M),
-				NewRecord("A", ref1, 2, r1F, 10, ref1, cigar2M),
-			},
-			expectedCoverageMap: map[int][]int{
-				0: []int{0, 0, 2},
-				1: []int{0, 0, 0},
-			},
-			expectedCoverageInfo: []int{0, 2, 0},
-		},
-		{
-			name:  "shard2-two",
-			shard: shard2,
-			records: []*sam.Record{
-				NewRecord("A", ref2, 1, r1F, 10, ref1, cigar2M),
-				NewRecord("A", ref2, 2, r1F, 10, ref1, cigar2M),
-			},
-			expectedCoverageMap: map[int][]int{
-				0: []int{0, 0, 0},
-				1: []int{0, 1, 2},
-			},
-			expectedCoverageInfo: []int{0, 0, 2},
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			// References ref1 and ref2
-			coverageMap := map[int][]int{
-				0: make([]int, ref1.Len()),
-				1: make([]int, ref2.Len()),
-			}
-			coverageInfo := []int{0, 0, 0}
-			var mutex sync.Mutex
-
-			c := highCoverageCheck{
-				maxDepth:           2,
-				coverageMap:        &coverageMap,
-				globalShardCovInfo: &coverageInfo,
-				mutex:              &mutex,
-			}
-			for _, r := range testCase.records {
-				err := c.Process(testCase.shard, r)
-				assert.NoError(t, err)
-			}
-
-			assert.Equal(t, testCase.expectedCoverageMap, coverageMap)
-			assert.Equal(t, testCase.expectedCoverageInfo, coverageInfo)
-		})
-	}
-}
-
-func TestIsInHighCoverageShard(t *testing.T) {
-	m := &MarkDuplicates{
-		highCoverageShards: map[int]bam.Shard{
-			0: bam.Shard{ShardIdx: 0, StartRef: chr1, Start: 22, EndRef: chr1, End: 23},
-			1: bam.Shard{ShardIdx: 0, StartRef: chr2, Start: 43, EndRef: chr2, End: 45},
-		},
-	}
-	tests := []struct {
-		record    *sam.Record
-		assertion assert.BoolAssertionFunc
-	}{
-		{
-			NewRecord("A:::1:10:1:1", chr1, 0, r1F, 22, chr1, cigar0),
-			assert.True,
-		}, {
-			NewRecord("A:::1:10:1:1", chr1, 0, r1F, 44, chr2, cigar0),
-			assert.True,
-		}, {
-			NewRecord("A:::1:10:1:1", chr1, 22, r1F, 22, chr1, cigar0),
-			assert.True,
-		}, {
-			NewRecord("A:::1:10:1:1", chr1, 22, r1F, 44, chr2, cigar0),
-			assert.True,
-		}, {
-			NewRecord("A:::1:10:1:1", chr1, 22, r1F, 0, chr2, cigar0),
-			assert.True,
-		}, {
-			NewRecord("A:::1:10:1:1", chr1, 22, r1F, 100, chr1, cigar0),
-			assert.True,
-		}, {
-			NewRecord("A:::1:10:1:1", chr1, 90, r1F, 100, chr1, cigar0),
-			assert.False,
-		},
-	}
-	for _, test := range tests {
-		test.assertion(t, m.recOrMateInHighCovShard(test.record))
-	}
 }

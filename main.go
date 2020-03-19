@@ -43,7 +43,7 @@ var (
 	parallelism          = flag.Int("parallelism", runtime.NumCPU(), "Number of parallel computations to run during the markdup phase")
 	queueLength          = flag.Int("queue-length", runtime.NumCPU()*5, "Number shards to queue while waiting for flush")
 	shardSize            = flag.Int("shard-size", 5000000, "approx shard size in bytes")
-	maxDepth             = flag.Int("max-depth", 3000000, "maximum coverage depth at a position")
+	maxDepth             = flag.Int("max-depth", 3000000, "maximum coverage depth at a position, set to 0 to disable")
 	minBases             = flag.Int("min-bases", 5000, "minimum number of bases per shard")
 	padding              = flag.Int("clip-padding", 143, "padding in bp, this must be larger than the largest per-read clipping distance")
 	clearExisting        = flag.Bool("clear-existing", false, "clear existing duplicate flag before marking")
@@ -75,32 +75,32 @@ func main() {
 	}
 
 	opts := md.Opts{
-		BamFile:                *bamFile,
-		IndexFile:              *indexFile,
-		MetricsFile:            *metricsFile,
-		HighCoverageShardsFile: *highCovFile,
-		Format:                 *format,
-		DepthMax:               *maxDepth,
-		ShardSize:              *shardSize,
-		MinBases:               *minBases,
-		Padding:                *padding,
-		DiskMateShards:         *diskMateShards,
-		ScratchDir:             *scratchDir,
-		Parallelism:            *parallelism,
-		QueueLength:            *queueLength,
-		ClearExisting:          *clearExisting,
-		RemoveDups:             *removeDups,
-		TagDups:                *tagDups,
-		IntDI:                  *intDI,
-		UseUmis:                *useUmis,
-		UmiFile:                *umiFile,
-		ScavengeUmis:           *scavengeUmis,
-		EmitUnmodifiedFields:   *emitUnmodifiedFields,
-		SeparateSingletons:     *separateSingletons,
-		OutputPath:             *outputPath,
-		StrandSpecific:         *strandSpecific,
-		OpticalHistogram:       *opticalHistogram,
-		OpticalHistogramMax:    *opticalHistogramMax,
+		BamFile:                  *bamFile,
+		IndexFile:                *indexFile,
+		MetricsFile:              *metricsFile,
+		HighCoverageIntervalFile: *highCovFile,
+		Format:                   *format,
+		CoverageMax:              *maxDepth,
+		ShardSize:                *shardSize,
+		MinBases:                 *minBases,
+		Padding:                  *padding,
+		DiskMateShards:           *diskMateShards,
+		ScratchDir:               *scratchDir,
+		Parallelism:              *parallelism,
+		QueueLength:              *queueLength,
+		ClearExisting:            *clearExisting,
+		RemoveDups:               *removeDups,
+		TagDups:                  *tagDups,
+		IntDI:                    *intDI,
+		UseUmis:                  *useUmis,
+		UmiFile:                  *umiFile,
+		ScavengeUmis:             *scavengeUmis,
+		EmitUnmodifiedFields:     *emitUnmodifiedFields,
+		SeparateSingletons:       *separateSingletons,
+		OutputPath:               *outputPath,
+		StrandSpecific:           *strandSpecific,
+		OpticalHistogram:         *opticalHistogram,
+		OpticalHistogramMax:      *opticalHistogramMax,
 	}
 
 	// Create the provider.
