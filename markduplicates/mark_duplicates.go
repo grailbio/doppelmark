@@ -61,9 +61,9 @@ type OpticalDetector interface {
 	// influence optical detection.
 	GetRecordProcessor() bampair.RecordProcessor
 
-	// RecordProcessorsDone should be called after the RecordProcessors
-	// have seen all the input records.
-	RecordProcessorsDone()
+	// RecordProcessorsDone should return maximum X and Y co-ordinates and
+	// be called after the RecordProcessors have seen all the input records.
+	RecordProcessorsDone() (int, int)
 
 	// Detect identifies the optical duplicates in pairs and returns
 	// their names in a slice. readGroupLibrary maps readGroup to
@@ -80,6 +80,7 @@ type Opts struct {
 	IndexFile                string
 	MetricsFile              string
 	HighCoverageIntervalFile string
+	TileSizeFile             string
 	Format                   string
 	CoverageMax              int
 	ShardSize                int
@@ -246,7 +247,7 @@ func (m *MarkDuplicates) Mark(shards []bam.Shard) (*MetricsCollection, error) {
 	m.shardInfo = shardInfo
 	m.globalMetrics.maxAlignDist = m.globalMaxAlignDist
 	if m.Opts.OpticalDetector != nil {
-		m.Opts.OpticalDetector.RecordProcessorsDone()
+		m.globalMetrics.maxX, m.globalMetrics.maxY = m.Opts.OpticalDetector.RecordProcessorsDone()
 	}
 
 	// Determine high coverage intervals if desired.
@@ -871,6 +872,11 @@ func SetupAndMark(ctx context.Context, provider bamprovider.Provider, opts *Opts
 			return err
 		}
 		if err := writeHighCoverageIntervals(ctx, opts, header, globalMetrics); err != nil {
+			return err
+		}
+	}
+	if opts.TileSizeFile != "" {
+		if err := writeTileSize(ctx, opts, globalMetrics); err != nil {
 			return err
 		}
 	}

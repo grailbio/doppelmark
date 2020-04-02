@@ -98,7 +98,8 @@ func (t *TileOpticalDetector) GetRecordProcessor() bampair.RecordProcessor {
 }
 
 // RecordProcessorsDone implements OpticalDetector.
-func (t *TileOpticalDetector) RecordProcessorsDone() {
+func (t *TileOpticalDetector) RecordProcessorsDone() (int, int) {
+	return 0, 0
 }
 
 // Detect implements OpticalDetector.

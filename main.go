@@ -39,6 +39,7 @@ var (
 	format               = flag.String("format", "bam", "Output format. Value is either 'bam' or 'pam'.")
 	metricsFile          = flag.String("metrics", "", "Output metrics file")
 	highCovFile          = flag.String("high-cov-regions", "", "Output high coverage regions file")
+	tileSizeFile         = flag.String("tile-size", "", "Output width and height of tile to file")
 	scratchDir           = flag.String("scratch-dir", "/tmp", "Directory to put scratch files")
 	parallelism          = flag.Int("parallelism", runtime.NumCPU(), "Number of parallel computations to run during the markdup phase")
 	queueLength          = flag.Int("queue-length", runtime.NumCPU()*5, "Number shards to queue while waiting for flush")
@@ -79,6 +80,7 @@ func main() {
 		IndexFile:                *indexFile,
 		MetricsFile:              *metricsFile,
 		HighCoverageIntervalFile: *highCovFile,
+		TileSizeFile:             *tileSizeFile,
 		Format:                   *format,
 		CoverageMax:              *maxDepth,
 		ShardSize:                *shardSize,

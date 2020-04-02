@@ -15,6 +15,7 @@ package markduplicates
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -94,6 +95,8 @@ func (m *Metrics) Add(other *Metrics) {
 type MetricsCollection struct {
 	// Global metrics
 	maxAlignDist int
+	maxX         int
+	maxY         int
 
 	// OpticalDistance stores the number of duplicate read pairs that
 	// have the given Euclidean distance.
@@ -251,6 +254,24 @@ func writeHighCoverageIntervals(ctx context.Context, opts *Opts, header *sam.Hea
 			opts.HighCoverageIntervalFile)
 	}
 	return nil
+}
+
+func writeTileSize(ctx context.Context, opts *Opts, globalMetrics *MetricsCollection) (err error) {
+	var f *os.File
+	f, err = os.Create(opts.TileSizeFile)
+	if err != nil {
+		return errors.E(err, "Couldn't create tile size file:", opts.TileSizeFile)
+	}
+	defer func() {
+		if err2 := f.Close(); err == nil && err2 != nil {
+			err = err2
+		}
+	}()
+	enc := json.NewEncoder(f)
+	return enc.Encode(map[string]int{
+		"tileWidth":  globalMetrics.maxX,
+		"tileHeight": globalMetrics.maxY,
+	})
 }
 
 func writeOpticalHistogram(ctx context.Context, opts *Opts, globalMetrics *MetricsCollection) (err error) {
