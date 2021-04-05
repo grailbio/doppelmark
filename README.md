@@ -1,3 +1,6 @@
+[![Tests](https://github.com/grailbio/base/workflows/tests/badge.svg)](https://github.com/grailbio/base/actions/workflows/tests.yml)
+[![Lint](https://github.com/grailbio/base/workflows/lint/badge.svg)](https://github.com/grailbio/base/actions/workflows/lint.yml)
+
 ## doppelmark duplicate marking tool
 
 doppelmark is a high-performance duplicate sequencing read marking

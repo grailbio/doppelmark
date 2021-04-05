@@ -1,0 +1,24 @@
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        go: [1.13, 1.14, 1.15, 1.16]
+        os: [ubuntu-latest, macos-latest]
+    name: Build & Test
+    runs-on: ${{ matrix.os }}
+    steps:
+    - name: Set up Go ${{ matrix.go }}
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.go }}
+    - name: Check out
+      uses: actions/checkout@v2
+    - name: Build
+      run: go build github.com/grailbio/doppelmark/...
+    - name: Test
+      run: go test github.com/grailbio/doppelmark/...
