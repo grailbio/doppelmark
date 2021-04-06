@@ -187,11 +187,11 @@ func (d *duplicateIndex) insertSingleton(r *sam.Record, fileIdx uint64) {
 
 	fivePosition := bam.UnclippedFivePrimePosition(r)
 	orientation := orientationByteSingle(bam.IsReversedRead(r))
-	var strand strand
+	var s strand
 	if d.opts.StrandSpecific {
-		strand = r1Strand(r)
+		s = r1Strand(r)
 	}
-	key := duplicateKey{r.Ref.ID(), fivePosition, -1, -1, orientation, strand}
+	key := duplicateKey{r.Ref.ID(), fivePosition, -1, -1, orientation, s}
 	d.entries[key] = append(d.entries[key], IndexedSingle{r, fileIdx})
 }
 
@@ -214,15 +214,15 @@ func (d *duplicateIndex) insertPair(a, b *sam.Record, aFileIdx, bFileIdx uint64)
 	}
 
 	// Update duplicate set.
-	var strand strand
+	var s strand
 	if d.opts.StrandSpecific {
-		strand = r1Strand(a)
+		s = r1Strand(a)
 	}
 	key := duplicateKey{
 		left.R.Ref.ID(), bam.UnclippedFivePrimePosition(left.R),
 		right.R.Ref.ID(), bam.UnclippedFivePrimePosition(right.R),
 		orientationBytePair(bam.IsReversedRead(left.R), bam.IsReversedRead(right.R)),
-		strand,
+		s,
 	}
 	d.entries[key] = append(d.entries[key], IndexedPair{left, right})
 }

@@ -122,8 +122,6 @@ type maxAlignDistCheck struct {
 	clearExisting      bool
 	padding            int
 	maxAlignDist       int
-	maxX               int
-	maxY               int
 	globalMaxAlignDist *int
 	mutex              *sync.Mutex
 }
