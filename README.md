@@ -1,5 +1,5 @@
-[![Tests](https://github.com/grailbio/base/workflows/tests/badge.svg)](https://github.com/grailbio/base/actions/workflows/tests.yml)
-[![Lint](https://github.com/grailbio/base/workflows/lint/badge.svg)](https://github.com/grailbio/base/actions/workflows/lint.yml)
+[![Tests](https://github.com/grailbio/doppelmark/actions/workflows/tests.yml/badge.svg)](https://github.com/grailbio/doppelmark/actions/workflows/tests.yml)
+[![Lint](https://github.com/grailbio/doppelmark/actions/workflows/lint.yml/badge.svg)](https://github.com/grailbio/doppelmark/actions/workflows/lint.yml)
 
 ## doppelmark duplicate marking tool
 
